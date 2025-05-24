@@ -1,279 +1,246 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import {
-    makeWASocket,
-    fetchLatestBaileysVersion,
-    DisconnectReason,
-    useMultiFileAuthState,
-    getContentType
-} from '@whiskeysockets/baileys';
 import express from 'express';
+import http from 'http';
 import pino from 'pino';
 import fs from 'fs/promises';
-import { File } from 'megajs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import http from 'http';
+import {
+  makeWASocket,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+  useMultiFileAuthState,
+  getContentType
+} from '@whiskeysockets/baileys';
+import { File } from 'megajs';
+import moment from 'moment-timezone';
 
-// Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configuration
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
-let Matrix = null;
-let useQR = false;
-let connectionAttempts = 0;
-const MAX_RETRIES = 5;
-const AUTO_LIKE_STATUS = process.env.AUTO_LIKE_STATUS === 'true' || true; // Enabled by default
 
-// Status reaction emojis
-const STATUS_EMOJIS = ['👍', '❤️', '🔥', '😮', '😂', '😍', '🎉', '👏'];
-
-// Logger setup
-const logger = pino({
-    timestamp: () => `,"time":"${new Date().toJSON()}"`,
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'trace'
-});
-
-// Session management
-const sessionDir = path.join(__dirname, 'session');
-const credsPath = path.join(sessionDir, 'creds.json');
-
-// Middleware
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure session directory exists
-async function ensureSessionDir() {
-    try {
-        await fs.access(sessionDir);
-    } catch {
-        await fs.mkdir(sessionDir, { recursive: true });
-    }
+const logger = pino({
+  timestamp: () => `,"time":"${new Date().toISOString()}"`,
+  level: 'info'
+});
+
+// Set default timezone to Africa/Nairobi
+moment.tz.setDefault('Africa/Nairobi');
+
+const userSockets = new Map();
+const sessionBasePath = path.join(__dirname, 'sessions');
+const verifiedUsers = new Set(); // Track verified users by session
+const config = {
+  SESSION_NAME: process.env.SESSION_NAME || 'Demon-Slayer',
+  CHANNEL_JID: process.env.CHANNEL_JID || '120363299029326322@newsletter',
+  CHANNEL_NAME: process.env.CHANNEL_NAME || "𝖒𝖆𝖗𝖎𝖘𝖊𝖑",
+  REQUIRED_CHANNEL: '0029VajJoCoLI8YePbpsnE3q',
+  TIMEZONE: 'Africa/Nairobi'
+};
+
+// Helper function to get Nairobi time
+function getNairobiTime() {
+  return moment().tz('Africa/Nairobi');
 }
 
-// Routes
+// Serve homepage
 app.get('/', async (req, res) => {
-    try {
-        const html = await fs.readFile(path.join(__dirname, 'index.html'), 'utf-8');
-        res.send(html);
-    } catch (error) {
-        res.status(500).send('Error loading interface');
-    }
+  try {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } catch (err) {
+    res.status(500).send('Error loading page');
+  }
 });
 
+// Verification endpoints
+app.post('/verify-channel', async (req, res) => {
+  const { sessionId } = req.body;
+  
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Session ID required' });
+  }
+
+  // Mark this session as verified
+  verifiedUsers.add(sessionId);
+  
+  res.json({ 
+    success: true, 
+    verified: true,
+    message: 'Verification complete. You may now deploy your bot.'
+  });
+});
+
+app.get('/check-verification/:sessionId', (req, res) => {
+  const isVerified = verifiedUsers.has(req.params.sessionId);
+  res.json({ 
+    verified: isVerified,
+    channelLink: `https://whatsapp.com/channel/${config.REQUIRED_CHANNEL}`
+  });
+});
+
+// Session endpoints
 app.post('/set-session', async (req, res) => {
-    const { SESSION_ID } = req.body;
-    
-    if (!SESSION_ID) {
-        return res.status(400).json({ error: 'SESSION_ID is required' });
-    }
+  const { SESSION_ID, sessionId } = req.body;
+  
+  if (!verifiedUsers.has(sessionId)) {
+    return res.status(403).json({ 
+      error: 'Please verify by visiting our channel first',
+      channelLink: `https://whatsapp.com/channel/${config.REQUIRED_CHANNEL}`
+    });
+  }
 
-    try {
-        process.env.SESSION_ID = SESSION_ID;
-        const success = await downloadSessionData();
-        
-        if (success) {
-            await startWhatsApp();
-            return res.json({ success: true, message: 'Bot started successfully' });
-        } else {
-            return res.status(500).json({ error: 'Failed to download session' });
-        }
-    } catch (error) {
-        logger.error('Session setup error:', error);
-        return res.status(500).json({ error: error.message });
-    }
+  if (!SESSION_ID) {
+    return res.status(400).json({ error: 'SESSION_ID required' });
+  }
+
+  const userId = 'default';
+  const success = await downloadSessionData(userId, SESSION_ID);
+  if (success) {
+    await startWhatsApp(userId, false);
+    res.json({ success: true });
+  } else {
+    res.status(500).json({ error: 'Session download failed' });
+  }
 });
 
-// Session download function
-async function downloadSessionData() {
-    if (!process.env.SESSION_ID) {
-        logger.error('SESSION_ID environment variable missing');
-        return false;
+// Nairobi time endpoint
+app.get('/nairobi-time', (req, res) => {
+  const now = getNairobiTime();
+  res.json({
+    time: now.format('HH:mm:ss'),
+    date: now.format('dddd, D MMMM YYYY'),
+    timezone: 'Africa/Nairobi'
+  });
+});
+
+// Utilities
+async function ensureSessionPath(userId) {
+  const userPath = path.join(sessionBasePath, userId);
+  try {
+    await fs.mkdir(userPath, { recursive: true });
+    return userPath;
+  } catch (err) {
+    logger.error(`Error creating session path: ${err}`);
+    throw err;
+  }
+}
+
+async function downloadSessionData(userId, sessionId) {
+  try {
+    // Support both CLOUD-AI~ and Demo-Slayer~ formats
+    let part;
+    if (sessionId.includes("CLOUD-AI~")) {
+      part = sessionId.split("CLOUD-AI~")[1];
+    } else if (sessionId.includes("Demo-Slayer~")) {
+      part = sessionId.split("Demo-Slayer~")[1];
+    } else {
+      throw new Error("Invalid session ID format");
     }
 
-    try {
-        const sessionPart = process.env.SESSION_ID.split("CLOUD-AI~")[1];
-        if (!sessionPart || !sessionPart.includes("#")) {
-            throw new Error('Invalid SESSION_ID format');
+    const [fileID, key] = part.split("#");
+    const file = File.fromURL(`https://mega.nz/file/${fileID}#${key}`);
+    const data = await new Promise((resolve, reject) => {
+      file.download((err, data) => err ? reject(err) : resolve(data));
+    });
+
+    const userPath = await ensureSessionPath(userId);
+    await fs.writeFile(path.join(userPath, 'creds.json'), data);
+    return true;
+  } catch (err) {
+    logger.error(`Session download failed: ${err}`);
+    return false;
+  }
+}
+
+async function startWhatsApp(userId, useQR = false) {
+  try {
+    const userPath = await ensureSessionPath(userId);
+    const { state, saveCreds } = await useMultiFileAuthState(userPath);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+      version,
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: useQR,
+      auth: state,
+      browser: [userId, 'Safari', '1.0']
+    });
+
+    userSockets.set(userId, sock);
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+      if (update.connection === 'open') {
+        await sendWelcomeMessage(sock);
+      }
+    });
+
+    sock.ev.on('messages.upsert', handleStatusUpdates(sock));
+
+  } catch (err) {
+    logger.error(`WhatsApp init failed: ${err}`);
+  }
+}
+
+async function sendWelcomeMessage(sock) {
+  try {
+    await sock.sendMessage(sock.user.id, {
+      text: `*Hello 👋 your session is Live*\n> *Made By Bera_Tech*`,
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: config.CHANNEL_JID,
+          newsletterName: config.CHANNEL_NAME,
+          serverMessageId: 143
         }
-
-        const [fileID, decryptKey] = sessionPart.split("#");
-        const file = File.fromURL(`https://mega.nz/file/${fileID}#${decryptKey}`);
-        
-        const data = await new Promise((resolve, reject) => {
-            file.download((err, data) => {
-                err ? reject(err) : resolve(data);
-            });
-        });
-
-        await fs.writeFile(credsPath, data);
-        logger.info('Session downloaded successfully');
-        return true;
-    } catch (error) {
-        logger.error('Session download failed:', error);
-        return false;
-    }
+      }
+    });
+  } catch (err) {
+    logger.error(`Welcome message failed: ${err}`);
+  }
 }
 
-// WhatsApp connection handler
-async function startWhatsApp() {
+function handleStatusUpdates(sock) {
+  return async ({ messages }) => {
     try {
-        await ensureSessionDir();
-        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        const { version } = await fetchLatestBaileysVersion();
+      const statusMsg = messages.find(m => m.key.remoteJid === 'status@broadcast');
+      if (!statusMsg) return;
 
-        Matrix = makeWASocket({
-            version,
-            logger: pino({ level: 'silent' }),
-            printQRInTerminal: useQR,
-            auth: state,
-            browser: ["Cloud-AI", "safari", "3.0"],
-            getMessage: async (key) => {
-                return { conversation: "WhatsApp Bot" };
-            }
-        });
+      const type = getContentType(statusMsg.message);
+      const message = type === 'ephemeralMessage' 
+        ? statusMsg.message.ephemeralMessage.message 
+        : statusMsg.message;
 
-        Matrix.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-            
-            if (connection === 'close') {
-                if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    if (connectionAttempts < MAX_RETRIES) {
-                        connectionAttempts++;
-                        logger.info(`Reconnecting... (Attempt ${connectionAttempts}/${MAX_RETRIES})`);
-                        setTimeout(startWhatsApp, 5000);
-                    } else {
-                        logger.error('Max reconnection attempts reached');
-                    }
-                } else {
-                    logger.error('Connection closed. You are logged out.');
-                }
-            } else if (connection === 'open') {
-                connectionAttempts = 0;
-                logger.info('Connected to WhatsApp');
-                await sendWelcomeMessage();
-            }
-        });
+      if (!message) return;
 
-        Matrix.ev.on('creds.update', saveCreds);
-        
-        // Status auto-view and like
-        Matrix.ev.on('messages.upsert', async ({ messages }) => {
-            try {
-                const message = messages[0];
-                if (!message || !message.message) return;
+      await sock.readMessages([statusMsg.key]);
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-                const contentType = getContentType(message.message);
-                const msg = contentType === 'ephemeralMessage' 
-                    ? message.message.ephemeralMessage.message 
-                    : message.message;
+      const emojis = ['🔥', '💯', '💎', '⚡', '✅', '💙', '👀', '🌟', '😎'];
+      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
 
-                // Check if it's a status update
-                if (message.key.remoteJid === 'status@broadcast' && AUTO_LIKE_STATUS) {
-                    logger.info('Detected status update');
-                    
-                    // Auto-view the status
-                    await Matrix.readMessages([message.key]);
-                    logger.info('Viewed status');
-                    
-                    // Auto-react to the status
-                    const randomEmoji = STATUS_EMOJIS[Math.floor(Math.random() * STATUS_EMOJIS.length)];
-                    await Matrix.sendMessage(message.key.remoteJid, {
-                        react: {
-                            text: randomEmoji,
-                            key: message.key
-                        }
-                    });
-                    logger.info(`Reacted to status with ${randomEmoji}`);
-                }
-            } catch (error) {
-                logger.error('Status handling error:', error);
-            }
-        });
+      await sock.sendMessage('status@broadcast', {
+        react: { text: emoji, key: statusMsg.key }
+      }, {
+        statusJidList: [statusMsg.key.participant, sock.user.id]
+      });
 
-        // Basic message handler
-        Matrix.ev.on("messages.upsert", ({ messages }) => {
-            logger.info('Received message:', messages[0]);
-        });
-
-    } catch (error) {
-        logger.error('Connection error:', error);
-        setTimeout(startWhatsApp, 10000);
+    } catch (err) {
+      logger.error(`Status update error: ${err}`);
     }
+  };
 }
 
-async function sendWelcomeMessage() {
-    try {
-        if (Matrix && Matrix.user) {
-            await Matrix.sendMessage(Matrix.user.id, {
-                text: `╭─────────────━┈⊷
-│ *BOT ONLINE* 
-╰─────────────━┈⊷
-│⏰ Time: ${new Date().toLocaleString()}
-│💻 Host: ${process.env.RENDER ? 'Render.com' : 'Local'}
-│🔔 Status Auto-Like: ${AUTO_LIKE_STATUS ? 'ON' : 'OFF'}
-╰─────────────━┈⊷`
-            });
-        }
-    } catch (error) {
-        logger.error('Welcome message error:', error);
-    }
-}
-
-// Initialize everything
-async function initialize() {
-    try {
-        // Start HTTP server
-        server.listen(PORT, () => {
-            logger.info(`Server running on port ${PORT}`);
-        });
-
-        // Check for existing session
-        try {
-            await fs.access(credsPath);
-            logger.info('Existing session found');
-            await startWhatsApp();
-        } catch {
-            if (process.env.SESSION_ID) {
-                logger.info('Attempting to download session...');
-                const success = await downloadSessionData();
-                if (success) {
-                    await startWhatsApp();
-                } else {
-                    useQR = true;
-                    await startWhatsApp();
-                }
-            } else {
-                useQR = true;
-                await startWhatsApp();
-            }
-        }
-
-        // Keep-alive monitor
-        setInterval(() => {
-            if (!Matrix || !Matrix.user) {
-                logger.warn('Connection lost, attempting reconnect...');
-                startWhatsApp();
-            }
-        }, 60000);
-
-    } catch (error) {
-        logger.error('Initialization failed:', error);
-        process.exit(1);
-    }
-}
-
-// Start the application
-initialize();
-
-// Clean exit handler
-process.on('SIGINT', () => {
-    logger.info('Shutting down gracefully...');
-    server.close();
-    process.exit(0);
+// Start server
+server.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} (Nairobi time: ${getNairobiTime().format()})`);
 });
