@@ -121,16 +121,6 @@ async function downloadSessionData(userId, sessionId) {
   }
 }
 
-async function updateBio(sock) {
-  try {
-    const now = getNairobiTime();
-    const bio = `⏰ ${now.format('HH:mm:ss')} | ${now.format('dddd')} | 📅 ${now.format('D MMMM YYYY')} | Enjoying`;
-    await sock.updateProfileStatus(bio);
-  } catch (err) {
-    logger.error(`Bio update failed: ${err}`);
-  }
-}
-
 /* ==================== FEATURE MANAGEMENT ==================== */
 
 async function manageAlwaysOnline(sock, userId, enable) {
@@ -417,69 +407,6 @@ async function handleYouTubeDownload(sock, msg) {
   }
 }
 
-// View Once Media Handler (Non-prefix version)
-async function handleViewOnce(sock, msg) {
-  try {
-    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-    const ownerNumber = config.OWNER_NUMBER + '@s.whatsapp.net';
-    
-    // Check if sender is Owner or Bot
-    const sender = msg.key.participant || msg.key.remoteJid;
-    const isOwner = sender === ownerNumber;
-    const isBot = sender === botNumber;
-    const isAuthorized = isOwner || isBot;
-
-    // Detect reaction on View Once message
-    const isReaction = msg.message?.reactionMessage;
-    const reactedToViewOnce = isReaction && msg.quoted && 
-      (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
-
-    // Detect emoji reply (alone or with text) only on View Once media
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    const isEmojiReply = /^[\p{Emoji}](\s|\S)*$/u.test(text.trim()) && 
-                       msg.quoted && 
-                       (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
-
-    // Secret Mode = Emoji Reply or Reaction (For Bot/Owner Only) on View Once media
-    const secretMode = (isEmojiReply || reactedToViewOnce) && isAuthorized;
-
-    if (!secretMode) return;
-
-    const targetMessage = reactedToViewOnce ? msg.quoted : msg;
-    if (!targetMessage.quoted) return;
-    
-    let message = targetMessage.quoted.message;
-    if (message.viewOnceMessageV2) message = message.viewOnceMessageV2.message;
-    else if (message.viewOnceMessage) message = message.viewOnceMessage.message;
-
-    // Additional check to ensure it's media (image, video, or audio)
-    const messageType = message ? Object.keys(message)[0] : null;
-    const isMedia = messageType && ['imageMessage', 'videoMessage', 'audioMessage'].includes(messageType);
-    
-    if (!message || !isMedia) return;
-
-    let buffer = await downloadMediaMessage(targetMessage.quoted, 'buffer');
-    if (!buffer) return;
-
-    let mimetype = message.audioMessage?.mimetype || 'audio/ogg';
-    let caption = `> *© cloud ai*`;
-
-    // Set recipient (bot or owner)
-    let recipient = isEmojiReply ? botNumber : ownerNumber;
-
-    if (messageType === 'imageMessage') {
-      await sock.sendMessage(recipient, { image: buffer, caption });
-    } else if (messageType === 'videoMessage') {
-      await sock.sendMessage(recipient, { video: buffer, caption, mimetype: 'video/mp4' });
-    } else if (messageType === 'audioMessage') {  
-      await sock.sendMessage(recipient, { audio: buffer, mimetype, ptt: true });
-    }
-
-  } catch (error) {
-    logger.error('View Once handler error:', error);
-  }
-}
-
 /* ==================== COMMAND HANDLER ==================== */
 
 function handleCommands(sock, userId) {
@@ -571,9 +498,6 @@ function handleCommands(sock, userId) {
         await handleAIChat(sock, msg);
       }
 
-      // Handle view once media (non-prefix)
-      await handleViewOnce(sock, msg);
-
     } catch (err) {
       logger.error(`Command handler error: ${err}`);
     }
@@ -601,13 +525,8 @@ async function startWhatsApp(userId, useQR = false) {
     userSockets.set(userId, sock);
     sock.ev.on('creds.update', saveCreds);
 
-    // Bio updates
-    const updateBioInterval = setInterval(() => updateBio(sock), 60000);
-    await updateBio(sock);
-
     sock.ev.on('connection.update', async (update) => {
       if (update.connection === 'close') {
-        clearInterval(updateBioInterval);
         manageAlwaysOnline(sock, userId, false);
         manageAutoTyping(sock, userId, false);
         manageAutoRecording(sock, userId, false);
@@ -640,8 +559,6 @@ async function sendWelcomeMessage(sock) {
             `• autotyping on/off\n` +
             `• autorecording on/off\n` +
             `• deepseek on/off\n\n` +
-            `View Once Media:\n` +
-            `• React with any emoji or send emoji reply\n` +
             `> *Made By Bera_Tech*`,
       contextInfo: {
         forwardingScore: 999,
