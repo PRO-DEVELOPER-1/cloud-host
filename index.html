@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud AI | WhatsApp Bot</title>
+    <title>CLOUD-AI // SESSION DEPLOYMENT</title>
     <style>
         :root {
             --neon-pink: #ff2a6d;
             --neon-blue: #05d9e8;
             --neon-purple: #d300c5;
-            --neon-green: #00ff9d;
+            --neon-orange: #FFA500;
+            --neon-lime: #32CD32;
             --dark-bg: #0d0221;
+            --darker-bg: #05010d;
+            --text-glow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+            --pink-glow: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink);
         }
         
         body {
             background-color: var(--dark-bg);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
+            color: var(--neon-blue);
+            font-family: 'Courier New', monospace;
             margin: 0;
             padding: 0;
             display: flex;
@@ -24,276 +28,332 @@
             align-items: center;
             min-height: 100vh;
             background-image: 
-                radial-gradient(circle at 10% 20%, rgba(255, 42, 109, 0.1) 0%, transparent 20%),
-                radial-gradient(circle at 90% 80%, rgba(5, 217, 232, 0.1) 0%, transparent 20%);
-            overflow-x: hidden;
+                radial-gradient(circle at 20% 30%, var(--neon-purple) 0%, transparent 25%),
+                radial-gradient(circle at 80% 70%, var(--neon-pink) 0%, transparent 25%),
+                linear-gradient(to bottom, var(--darker-bg), var(--dark-bg));
+            overflow: hidden;
         }
-
-        .container {
-            background: rgba(13, 2, 33, 0.8);
+        
+        .terminal {
+            width: 700px;
+            background-color: rgba(13, 2, 33, 0.8);
             border: 1px solid var(--neon-blue);
-            border-radius: 15px;
-            box-shadow: 
-                0 0 15px var(--neon-pink),
-                0 0 30px rgba(255, 42, 109, 0.3);
+            box-shadow: 0 0 20px var(--neon-blue), inset 0 0 10px var(--neon-blue);
+            border-radius: 5px;
             padding: 30px;
-            width: 90%;
-            max-width: 500px;
             position: relative;
             overflow: hidden;
         }
-
-        .container::before {
-            content: '';
+        
+        .terminal::before {
+            content: "";
             position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            border-radius: 15px;
-            background: linear-gradient(45deg, 
-                var(--neon-pink), 
-                var(--neon-blue), 
-                var(--neon-purple));
-            z-index: -1;
-            animation: borderGlow 3s linear infinite;
-        }
-
-        @keyframes borderGlow {
-            0% { filter: blur(5px); opacity: 0.7; }
-            50% { filter: blur(7px); opacity: 1; }
-            100% { filter: blur(5px); opacity: 0.7; }
-        }
-
-        h1 {
-            color: var(--neon-green);
-            text-align: center;
-            margin-bottom: 25px;
-            font-size: 2.2rem;
-            text-shadow: 0 0 10px var(--neon-green);
-        }
-
-        .logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .logo img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--neon-blue);
-            box-shadow: 0 0 15px var(--neon-blue);
-        }
-
-        .instructions {
-            background: rgba(0, 0, 0, 0.3);
-            border-left: 3px solid var(--neon-purple);
-            padding: 15px;
-            margin-bottom: 25px;
-            border-radius: 0 8px 8px 0;
-        }
-
-        .instructions ol {
-            padding-left: 20px;
-            margin: 10px 0;
-        }
-
-        .instructions li {
-            margin-bottom: 10px;
-            line-height: 1.5;
-        }
-
-        .pair-link {
-            display: block;
-            background: rgba(5, 217, 232, 0.1);
-            color: var(--neon-blue);
-            text-align: center;
-            padding: 12px;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 2px solid var(--neon-pink);
             border-radius: 8px;
-            margin: 20px 0;
-            text-decoration: none;
-            border: 1px solid var(--neon-blue);
-            transition: all 0.3s ease;
-            font-weight: bold;
+            animation: pulse 4s infinite alternate;
+            z-index: -1;
         }
-
-        .pair-link:hover {
-            background: rgba(5, 217, 232, 0.2);
-            box-shadow: 0 0 15px var(--neon-blue);
-            transform: translateY(-2px);
+        
+        @keyframes pulse {
+            0% { opacity: 0.3; }
+            100% { opacity: 0.7; }
         }
-
-        .form-group {
-            margin-bottom: 20px;
+        
+        h1 {
+            color: var(--neon-pink);
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: var(--text-glow);
+            letter-spacing: 3px;
         }
-
+        
+        .input-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+        
         label {
             display: block;
             margin-bottom: 8px;
-            color: var(--neon-pink);
-            font-weight: bold;
+            color: var(--neon-blue);
+            font-size: 1.1em;
+            text-shadow: var(--text-glow);
         }
-
-        input[type="text"] {
+        
+        input {
             width: 100%;
             padding: 12px 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--neon-purple);
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-            transition: all 0.3s ease;
+            background-color: rgba(5, 217, 232, 0.1);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            font-size: 1.1em;
+            border-radius: 3px;
+            box-shadow: inset 0 0 10px rgba(5, 217, 232, 0.3);
+            transition: all 0.3s;
         }
-
-        input[type="text"]:focus {
+        
+        input:focus {
             outline: none;
-            border-color: var(--neon-green);
-            box-shadow: 0 0 10px var(--neon-green);
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 15px var(--neon-pink), inset 0 0 10px rgba(255, 42, 109, 0.3);
         }
-
+        
         button {
-            width: 100%;
-            padding: 14px;
             background: linear-gradient(45deg, var(--neon-pink), var(--neon-purple));
-            border: none;
-            border-radius: 8px;
             color: white;
-            font-size: 16px;
-            font-weight: bold;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
             cursor: pointer;
-            transition: all 0.3s ease;
+            border-radius: 3px;
+            width: 100%;
+            font-weight: bold;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            transition: all 0.3s;
+            box-shadow: 0 0 15px var(--neon-pink);
             margin-top: 10px;
         }
-
+        
         button:hover {
-            background: linear-gradient(45deg, var(--neon-purple), var(--neon-pink));
-            box-shadow: 0 0 20px var(--neon-pink);
+            box-shadow: 0 0 25px var(--neon-pink), 0 0 35px var(--neon-purple);
             transform: translateY(-2px);
         }
-
-        #status {
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .glitch {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neon-pink), var(--neon-blue), var(--neon-purple));
+            animation: glitch-anim 5s infinite;
+        }
+        
+        @keyframes glitch-anim {
+            0% { width: 0; left: 0; }
+            25% { width: 100%; left: 0; }
+            50% { width: 0; left: 100%; }
+            75% { width: 100%; left: 0; }
+            100% { width: 0; left: 0; }
+        }
+        
+        .status {
             margin-top: 20px;
-            padding: 12px;
-            border-radius: 8px;
-            display: none;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .success {
-            background: rgba(0, 255, 157, 0.1);
-            border: 1px solid var(--neon-green);
-            color: var(--neon-green);
-        }
-
-        .error {
-            background: rgba(255, 42, 109, 0.1);
-            border: 1px solid var(--neon-pink);
+            padding: 10px;
+            border: 1px solid var(--neon-blue);
+            border-radius: 3px;
+            min-height: 50px;
+            font-family: monospace;
             color: var(--neon-pink);
+            display: none;
         }
-
-        .neon-text {
-            text-shadow: 0 0 5px currentColor;
+        
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: rgba(5, 217, 232, 0.1);
+            border-left: 3px solid var(--neon-orange);
+            color: var(--neon-lime);
+            font-size: 0.9em;
+            line-height: 1.5;
         }
-
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.6);
+        
+        .instructions strong {
+            color: var(--neon-orange);
+        }
+        
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--neon-blue);
+            border-style: solid;
+            border-width: 0;
+        }
+        
+        .corner-tl {
+            top: 0;
+            left: 0;
+            border-top-width: 2px;
+            border-left-width: 2px;
+        }
+        
+        .corner-tr {
+            top: 0;
+            right: 0;
+            border-top-width: 2px;
+            border-right-width: 2px;
+        }
+        
+        .corner-bl {
+            bottom: 0;
+            left: 0;
+            border-bottom-width: 2px;
+            border-left-width: 2px;
+        }
+        
+        .corner-br {
+            bottom: 0;
+            right: 0;
+            border-bottom-width: 2px;
+            border-right-width: 2px;
+        }
+        
+        .matrix-rain {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.1;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <img src="https://files.catbox.moe/8h0cyi.jpg" alt="Cloud AI Logo">
+    <div class="matrix-rain" id="matrixRain"></div>
+    <div class="terminal">
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+        <div class="glitch"></div>
+        
+        <h1>CLOUD-AI // SESSION DEPLOY</h1>
+        
+        <div class="input-group">
+            <label for="sessionId">ENTER SESSION ID</label>
+            <input type="text" id="sessionId" placeholder="CLOUD-AI~FILEID#DECRYPTKEY" required>
         </div>
         
-        <h1 class="neon-text">CLOUD AI <span style="color: var(--neon-blue)">WHATSAPP BOT</span></h1>
+        <button id="deployBtn">DEPLOY SESSION</button>
         
         <div class="instructions">
-            <p><strong>Follow these steps to deploy your bot:</strong></p>
-            <ol>
-                <li>Click the link below to pair your WhatsApp account</li>
-                <li>After pairing, you'll receive your <strong>Session ID</strong></li>
-                <li>Copy the Session ID and paste it below</li>
-                <li>Click <strong>DEPLOY BOT</strong> to activate</li>
-            </ol>
+            <strong>INSTRUCTIONS:</strong><br>
+            1. Format: <strong>CLOUD-AI~FILEID#DECRYPTKEY</strong><br>
+            2. Get your session from Mega.nz<br>
+            3. Must include both file ID and decryption key<br>
+            4. Invalid format will trigger QR authentication
         </div>
         
-        <a href="https://cloud-tech-tces.onrender.com" target="_blank" class="pair-link neon-text">
-            🔗 CLICK HERE TO GET YOUR SESSION ID
-        </a>
+        <div class="status" id="statusBox"></div>
         
-        <div class="form-group">
-            <label for="sessionId">PASTE YOUR SESSION ID HERE:</label>
-            <input type="text" id="sessionId" placeholder="CLOUD-AI~your_file_id#your_decryption_key">
-        </div>
-        
-        <button id="deployBtn">⚡ DEPLOY BOT ⚡</button>
-        
-        <div id="status"></div>
-        
-        <div class="footer">
-            <p>Need help? Contact support@cloudai.com</p>
-        </div>
+        <div class="scanlines"></div>
     </div>
 
     <script>
         document.getElementById('deployBtn').addEventListener('click', async () => {
             const sessionId = document.getElementById('sessionId').value.trim();
-            const statusEl = document.getElementById('status');
+            const statusBox = document.getElementById('statusBox');
             
             if (!sessionId) {
-                showStatus('Please enter your Session ID', 'error');
+                statusBox.textContent = "❌ ERROR: Session ID cannot be empty!";
+                statusBox.style.display = "block";
+                statusBox.style.color = "var(--neon-pink)";
                 return;
             }
             
-            if (!sessionId.includes('CLOUD-AI~') || !sessionId.includes('#')) {
-                showStatus('Invalid Session ID format. Must contain both file ID and decryption key.', 'error');
+            // Validate the format
+            if (!sessionId.startsWith("CLOUD-AI~") || !sessionId.includes("#")) {
+                statusBox.textContent = "⚠️ WARNING: Invalid format! QR code will be used instead.";
+                statusBox.style.display = "block";
+                statusBox.style.color = "var(--neon-orange)";
                 return;
             }
+            
+            statusBox.textContent = "⌛ DEPLOYING SESSION...";
+            statusBox.style.display = "block";
+            statusBox.style.color = "var(--neon-blue)";
             
             try {
-                showStatus('Deploying your bot...', 'success');
-                
-                const response = await fetch('/set-session', {
+                const response = await fetch('/deploy', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ SESSION_ID: sessionId })
+                    body: JSON.stringify({ sessionId })
                 });
                 
-                const result = await response.json();
+                const data = await response.json();
                 
-                if (response.ok) {
-                    showStatus('Bot deployed successfully!', 'success');
+                if (data.success) {
+                    statusBox.textContent = "✅ SESSION DEPLOYED SUCCESSFULLY!";
+                    statusBox.style.color = "var(--neon-lime)";
                 } else {
-                    showStatus(`Error: ${result.error || 'Failed to deploy bot'}`, 'error');
+                    statusBox.textContent = `❌ ERROR: ${data.message || "Failed to deploy session"}`;
+                    statusBox.style.color = "var(--neon-pink)";
                 }
             } catch (error) {
-                showStatus(`Network error: ${error.message}`, 'error');
-                console.error('Deployment error:', error);
+                statusBox.textContent = "❌ NETWORK ERROR: Failed to connect to server";
+                statusBox.style.color = "var(--neon-pink)";
+                console.error("Deployment error:", error);
             }
         });
+
+        // Matrix rain effect
+        const matrixRain = document.getElementById('matrixRain');
+        const canvas = document.createElement('canvas');
+        matrixRain.appendChild(canvas);
         
-        function showStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.className = type;
-            statusEl.style.display = 'block';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        
+        const cols = Math.floor(w / 20) + 1;
+        const ypos = Array(cols).fill(0);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, h);
+        
+        function matrix() {
+            ctx.fillStyle = '#0001';
+            ctx.fillRect(0, 0, w, h);
             
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 5000);
+            ctx.fillStyle = '#0f0';
+            ctx.font = '15pt monospace';
+            
+            ypos.forEach((y, ind) => {
+                const text = String.fromCharCode(Math.random() * 128);
+                const x = ind * 20;
+                ctx.fillText(text, x, y);
+                
+                if (y > 100 + Math.random() * 10000) ypos[ind] = 0;
+                else ypos[ind] = y + 20;
+            });
         }
+        
+        setInterval(matrix, 50);
     </script>
 </body>
 </html>
