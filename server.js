@@ -121,16 +121,6 @@ async function downloadSessionData(userId, sessionId) {
   }
 }
 
-async function updateBio(sock) {
-  try {
-    const now = getNairobiTime();
-    const bio = `⏰ ${now.format('HH:mm:ss')} | ${now.format('dddd')} | 📅 ${now.format('D MMMM YYYY')} | Enjoying`;
-    await sock.updateProfileStatus(bio);
-  } catch (err) {
-    logger.error(`Bio update failed: ${err}`);
-  }
-}
-
 /* ==================== FEATURE MANAGEMENT ==================== */
 
 async function manageAlwaysOnline(sock, userId, enable) {
@@ -249,7 +239,6 @@ async function manageAutoRecording(sock, userId, enable) {
 
 /* ==================== FEATURE HANDLERS ==================== */
 
-// Ping Command Handler
 async function handlePing(sock, msg) {
   const jid = msg.key.remoteJid;
   const start = Date.now();
@@ -264,7 +253,6 @@ async function handlePing(sock, msg) {
   }, { quoted: msg });
 }
 
-// Uptime Command Handler
 async function handleUptime(sock, msg) {
   const jid = msg.key.remoteJid;
   await sock.sendMessage(jid, { 
@@ -272,13 +260,11 @@ async function handleUptime(sock, msg) {
   }, { quoted: msg });
 }
 
-// AI Chat Handler
 async function handleAIChat(sock, msg) {
   const jid = msg.key.remoteJid;
   const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
   
   try {
-    // Only respond to owner messages
     const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
     const ownerNumber = config.OWNER_NUMBER + '@s.whatsapp.net';
     const sender = msg.key.participant || msg.key.remoteJid;
@@ -334,7 +320,6 @@ async function handleAIChat(sock, msg) {
   }
 }
 
-// YouTube Downloader Handler
 async function handleYouTubeDownload(sock, msg) {
   const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
   const jid = msg.key.remoteJid;
@@ -417,30 +402,25 @@ async function handleYouTubeDownload(sock, msg) {
   }
 }
 
-// View Once Media Handler (Non-prefix version)
 async function handleViewOnce(sock, msg) {
   try {
     const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
     const ownerNumber = config.OWNER_NUMBER + '@s.whatsapp.net';
     
-    // Check if sender is Owner or Bot
     const sender = msg.key.participant || msg.key.remoteJid;
     const isOwner = sender === ownerNumber;
     const isBot = sender === botNumber;
     const isAuthorized = isOwner || isBot;
 
-    // Detect reaction on View Once message
     const isReaction = msg.message?.reactionMessage;
     const reactedToViewOnce = isReaction && msg.quoted && 
       (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
 
-    // Detect emoji reply (alone or with text) only on View Once media
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
     const isEmojiReply = /^[\p{Emoji}](\s|\S)*$/u.test(text.trim()) && 
                        msg.quoted && 
                        (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
 
-    // Secret Mode = Emoji Reply or Reaction (For Bot/Owner Only) on View Once media
     const secretMode = (isEmojiReply || reactedToViewOnce) && isAuthorized;
 
     if (!secretMode) return;
@@ -452,7 +432,6 @@ async function handleViewOnce(sock, msg) {
     if (message.viewOnceMessageV2) message = message.viewOnceMessageV2.message;
     else if (message.viewOnceMessage) message = message.viewOnceMessage.message;
 
-    // Additional check to ensure it's media (image, video, or audio)
     const messageType = message ? Object.keys(message)[0] : null;
     const isMedia = messageType && ['imageMessage', 'videoMessage', 'audioMessage'].includes(messageType);
     
@@ -464,7 +443,6 @@ async function handleViewOnce(sock, msg) {
     let mimetype = message.audioMessage?.mimetype || 'audio/ogg';
     let caption = `> *© cloud ai*`;
 
-    // Set recipient (bot or owner)
     let recipient = isEmojiReply ? botNumber : ownerNumber;
 
     if (messageType === 'imageMessage') {
@@ -496,7 +474,6 @@ function handleCommands(sock, userId) {
       const sender = msg.key.participant || msg.key.remoteJid;
       const isOwner = sender === config.OWNER_NUMBER + '@s.whatsapp.net';
 
-      // Handle basic commands
       if (command === 'ping') {
         await handlePing(sock, msg);
         return;
@@ -507,7 +484,6 @@ function handleCommands(sock, userId) {
         return;
       }
 
-      // Handle owner commands
       if (command === 'alwaysonline on') {
         if (!isOwner) return;
         await manageAlwaysOnline(sock, userId, true);
@@ -560,18 +536,15 @@ function handleCommands(sock, userId) {
         return;
       }
 
-      // Handle media download commands
       if (command.startsWith('play ') || command.startsWith('video ')) {
         await handleYouTubeDownload(sock, msg);
         return;
       }
 
-      // Handle AI chat (owner only)
       if (isOwner) {
         await handleAIChat(sock, msg);
       }
 
-      // Handle view once media (non-prefix)
       await handleViewOnce(sock, msg);
 
     } catch (err) {
@@ -601,13 +574,8 @@ async function startWhatsApp(userId, useQR = false) {
     userSockets.set(userId, sock);
     sock.ev.on('creds.update', saveCreds);
 
-    // Bio updates
-    const updateBioInterval = setInterval(() => updateBio(sock), 60000);
-    await updateBio(sock);
-
     sock.ev.on('connection.update', async (update) => {
       if (update.connection === 'close') {
-        clearInterval(updateBioInterval);
         manageAlwaysOnline(sock, userId, false);
         manageAutoTyping(sock, userId, false);
         manageAutoRecording(sock, userId, false);
@@ -616,12 +584,14 @@ async function startWhatsApp(userId, useQR = false) {
       }
     });
 
-    // Set up message handlers
     sock.ev.on('messages.upsert', handleStatusUpdates(sock));
     sock.ev.on('messages.upsert', handleCommands(sock, userId));
 
   } catch (err) {
     logger.error(`WhatsApp init failed: ${err}`);
+    // Attempt restart after delay
+    await delay(10000);
+    await startWhatsApp(userId, useQR);
   }
 }
 
@@ -658,7 +628,6 @@ async function sendWelcomeMessage(sock) {
   }
 }
 
-// Status update handler
 function handleStatusUpdates(sock) {
   return async ({ messages }) => {
     try {
@@ -741,6 +710,21 @@ app.get('/nairobi-time', (req, res) => {
     date: now.format('dddd, D MMMM YYYY'),
     timezone: 'Africa/Nairobi'
   });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  logger.error(`Unhandled error: ${err.stack}`);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Process error handlers
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught Exception: ${err.stack}`);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
 });
 
 server.listen(PORT, () => {
