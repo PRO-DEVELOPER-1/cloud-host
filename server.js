@@ -11,10 +11,8 @@ import {
   makeWASocket,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
-  delay,
   isJidGroup,
-  Browsers,
-  downloadMediaMessage
+  Browsers
 } from '@whiskeysockets/baileys';
 import { File } from 'megajs';
 import moment from 'moment-timezone';
@@ -42,30 +40,34 @@ moment.tz.setDefault('Africa/Nairobi');
 const config = {
   SESSION_NAME: process.env.SESSION_NAME || 'Demon-Slayer',
   OWNER_NUMBER: process.env.OWNER_NUMBER || '',
-  CHANNEL_JID: process.env.CHANNEL_JID || '120363299029326322@newsletter',
-  CHANNEL_NAME: process.env.CHANNEL_NAME || "𝖒𝖆𝖗𝖎𝖘𝖊𝖑",
-  REQUIRED_CHANNEL: '0029VajJoCoLI8YePbpsnE3q',
-  TIMEZONE: 'Africa/Nairobi',
-  ALWAYS_ONLINE: false,
-  AUTO_TYPING: false,
-  AUTO_RECORDING: false
+  TIMEZONE: 'Africa/Nairobi'
 };
 
 const userSockets = new Map();
 const sessionBasePath = path.join(__dirname, 'sessions');
 const verifiedUsers = new Set();
-const userSettings = new Map();
-const gptStatusFile = path.resolve(__dirname, "gpt4o_status.json");
 
 // Track bot start time for uptime
 const startTime = new Date();
 
-const apiUrls = [
-  "https://api.siputzx.my.id/api/ai/deepseek-llm-67b-chat?content=",
-  "https://vapis.my.id/api/gpt4o?q=",
-  "https://vapis.my.id/api/gemini?q=",
-  "https://vapis.my.id/api/luminai?q="
-];
+// AI API Configuration
+const aiApis = {
+  deepseek: "https://api.siputzx.my.id/api/ai/deepseek-llm-67b-chat?content=",
+  gemini: "https://vapis.my.id/api/gemini?q=",
+  luminai: "https://vapis.my.id/api/luminai?q="
+};
+
+// YouTube Download APIs
+const youtubeApis = {
+  video: [
+    "https://api.giftedtech.web.id/api/download/dlmp4?url=",
+    "https://apis.davidcyriltech.my.id/download/ytmp4?url="
+  ],
+  audio: [
+    "https://apis.giftedtech.web.id/api/download/dlmp3?apikey=gifted&url=",
+    "https://apis.davidcyriltech.my.id/download/ytmp3?url="
+  ]
+};
 
 /* ==================== HELPER FUNCTIONS ==================== */
 
@@ -121,122 +123,6 @@ async function downloadSessionData(userId, sessionId) {
   }
 }
 
-/* ==================== FEATURE MANAGEMENT ==================== */
-
-async function manageAlwaysOnline(sock, userId, enable) {
-  if (enable) {
-    logger.info(`Enabling always online for ${userId}`);
-    const interval = setInterval(async () => {
-      try {
-        await sock.sendPresenceUpdate('available');
-        logger.debug(`Sent presence update for ${userId}`);
-      } catch (err) {
-        logger.error(`Always online error: ${err}`);
-        clearInterval(interval);
-      }
-    }, 20000);
-
-    userSettings.set(`${userId}-alwaysOnline`, interval);
-    config.ALWAYS_ONLINE = true;
-  } else {
-    logger.info(`Disabling always online for ${userId}`);
-    const interval = userSettings.get(`${userId}-alwaysOnline`);
-    if (interval) clearInterval(interval);
-    userSettings.delete(`${userId}-alwaysOnline`);
-    config.ALWAYS_ONLINE = false;
-  }
-}
-
-async function manageAutoTyping(sock, userId, enable) {
-  if (enable) {
-    logger.info(`Enabling auto typing for ${userId}`);
-    const interval = setInterval(async () => {
-      try {
-        const chats = await sock.fetchBlocklist();
-        const validChats = chats.filter(chat => !isJidGroup(chat));
-        
-        if (validChats.length > 0) {
-          const recentMessages = await Promise.all(
-            validChats.map(async chat => {
-              const messages = await sock.fetchMessages(chat, { limit: 1 });
-              return messages[0];
-            })
-          );
-          
-          const unrespondedChats = validChats.filter((chat, index) => {
-            const msg = recentMessages[index];
-            return msg && !msg.key.fromMe;
-          });
-
-          if (unrespondedChats.length > 0) {
-            const randomChat = unrespondedChats[Math.floor(Math.random() * unrespondedChats.length)];
-            await sock.sendPresenceUpdate('composing', randomChat);
-            logger.debug(`Sent typing indicator to ${randomChat}`);
-            await delay(2000);
-            await sock.sendPresenceUpdate('paused', randomChat);
-          }
-        }
-      } catch (err) {
-        logger.error(`Auto typing error: ${err}`);
-      }
-    }, 30000);
-
-    userSettings.set(`${userId}-autoTyping`, interval);
-    config.AUTO_TYPING = true;
-  } else {
-    logger.info(`Disabling auto typing for ${userId}`);
-    const interval = userSettings.get(`${userId}-autoTyping`);
-    if (interval) clearInterval(interval);
-    userSettings.delete(`${userId}-autoTyping`);
-    config.AUTO_TYPING = false;
-  }
-}
-
-async function manageAutoRecording(sock, userId, enable) {
-  if (enable) {
-    logger.info(`Enabling auto recording for ${userId}`);
-    const interval = setInterval(async () => {
-      try {
-        const chats = await sock.fetchBlocklist();
-        const validChats = chats.filter(chat => !isJidGroup(chat));
-        
-        if (validChats.length > 0) {
-          const recentMessages = await Promise.all(
-            validChats.map(async chat => {
-              const messages = await sock.fetchMessages(chat, { limit: 1 });
-              return messages[0];
-            })
-          );
-          
-          const unrespondedChats = validChats.filter((chat, index) => {
-            const msg = recentMessages[index];
-            return msg && !msg.key.fromMe;
-          });
-
-          if (unrespondedChats.length > 0) {
-            const randomChat = unrespondedChats[Math.floor(Math.random() * unrespondedChats.length)];
-            await sock.sendPresenceUpdate('recording', randomChat);
-            logger.debug(`Sent recording indicator to ${randomChat}`);
-            await delay(2000);
-            await sock.sendPresenceUpdate('paused', randomChat);
-          }
-        }
-      } catch (err) {
-        logger.error(`Auto recording error: ${err}`);
-      }
-    }, 30000);
-
-    userSettings.set(`${userId}-autoRecording`, interval);
-    config.AUTO_RECORDING = true;
-  } else {
-    logger.info(`Disabling auto recording for ${userId}`);
-    const interval = userSettings.get(`${userId}-autoRecording`);
-    if (interval) clearInterval(interval);
-    userSettings.delete(`${userId}-autoRecording`);
-    config.AUTO_RECORDING = false;
-  }
-}
-
 /* ==================== FEATURE HANDLERS ==================== */
 
 async function handlePing(sock, msg) {
@@ -269,40 +155,27 @@ async function handleAIChat(sock, msg) {
     const ownerNumber = config.OWNER_NUMBER + '@s.whatsapp.net';
     const sender = msg.key.participant || msg.key.remoteJid;
     const isOwner = sender === ownerNumber;
-    const isBot = sender === botNumber;
     
-    if (!isOwner && !isBot) return;
-
-    const gptStatus = await readGptStatus();
-
-    if (text.toLowerCase() === "deepseek on" || text.toLowerCase() === "deepseek off") {
-      const enable = text.toLowerCase() === "deepseek on";
-      await writeGptStatus(enable);
-      await sock.sendMessage(jid, { text: `✅ AI has been ${enable ? "activated" : "deactivated"}.` }, { quoted: msg });
-      return;
-    }
-
-    if (!gptStatus.enabled) return;
+    if (!isOwner) return;
 
     await sock.sendMessage(jid, { react: { text: '💻', key: msg.key } });
 
     let reply = null;
 
-    for (const baseUrl of apiUrls) {
+    // Try all AI APIs in order
+    for (const [apiName, apiUrl] of Object.entries(aiApis)) {
       try {
-        const response = await fetch(baseUrl + encodeURIComponent(text));
-        if (!response.ok) {
-          logger.error(`API failed: ${baseUrl}, status: ${response.status}`);
-          continue;
-        }
-
+        const response = await fetch(apiUrl + encodeURIComponent(text));
+        if (!response.ok) continue;
+        
         const json = await response.json();
-        reply = json.data || json.message;
-        if (reply) break;
-
+        reply = json.data || json.message || json.result;
+        if (reply) {
+          logger.info(`Used ${apiName} API successfully`);
+          break;
+        }
       } catch (err) {
-        logger.error(`Error with API ${baseUrl}:`, err);
-        continue;
+        logger.error(`Error with ${apiName} API:`, err);
       }
     }
 
@@ -359,26 +232,23 @@ async function handleYouTubeDownload(sock, msg) {
     }, { quoted: msg });
 
     const videoUrl = encodeURIComponent(video.url);
-    const apis = isVideo ? [
-      `https://api.giftedtech.web.id/api/download/dlmp4?url=${videoUrl}`,
-      `https://apis.davidcyriltech.my.id/download/ytmp4?url=${videoUrl}`,
-      `https://www.dark-yasiya-api.site/download/ytmp4?url=${videoUrl}`
-    ] : [
-      `https://apis.giftedtech.web.id/api/download/dlmp3?apikey=gifted&url=${videoUrl}`,
-      `https://apis.davidcyriltech.my.id/download/ytmp3?url=${videoUrl}`
-    ];
-
+    const apisToUse = isVideo ? youtubeApis.video : youtubeApis.audio;
     let downloadUrl;
-    for (const api of apis) {
+
+    for (const api of apisToUse) {
       try {
-        const response = await fetch(api);
+        const response = await fetch(api + videoUrl);
         const data = await response.json();
-        if (data.success && data.result?.download_url) {
+        
+        if (data.result?.download_url) {
           downloadUrl = data.result.download_url;
+          break;
+        } else if (data.download_url) {
+          downloadUrl = data.download_url;
           break;
         }
       } catch (err) {
-        logger.error(`API ${api} failed: ${err}`);
+        logger.error(`YouTube API failed: ${err}`);
       }
     }
 
@@ -391,7 +261,7 @@ async function handleYouTubeDownload(sock, msg) {
     await sock.sendMessage(jid, {
       [isVideo ? 'video' : 'audio']: { url: downloadUrl },
       mimetype: isVideo ? 'video/mp4' : 'audio/mpeg',
-      caption: isVideo ? '📥 *Downloaded in Video Format*' : '📥 *Downloaded in Audio Format*'
+      caption: isVideo ? '📥 *Downloaded Video*' : '📥 *Downloaded Audio*'
     }, { quoted: msg });
 
   } catch (err) {
@@ -402,65 +272,9 @@ async function handleYouTubeDownload(sock, msg) {
   }
 }
 
-async function handleViewOnce(sock, msg) {
-  try {
-    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-    const ownerNumber = config.OWNER_NUMBER + '@s.whatsapp.net';
-    
-    const sender = msg.key.participant || msg.key.remoteJid;
-    const isOwner = sender === ownerNumber;
-    const isBot = sender === botNumber;
-    const isAuthorized = isOwner || isBot;
-
-    const isReaction = msg.message?.reactionMessage;
-    const reactedToViewOnce = isReaction && msg.quoted && 
-      (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
-
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    const isEmojiReply = /^[\p{Emoji}](\s|\S)*$/u.test(text.trim()) && 
-                       msg.quoted && 
-                       (msg.quoted.message?.viewOnceMessage || msg.quoted.message?.viewOnceMessageV2);
-
-    const secretMode = (isEmojiReply || reactedToViewOnce) && isAuthorized;
-
-    if (!secretMode) return;
-
-    const targetMessage = reactedToViewOnce ? msg.quoted : msg;
-    if (!targetMessage.quoted) return;
-    
-    let message = targetMessage.quoted.message;
-    if (message.viewOnceMessageV2) message = message.viewOnceMessageV2.message;
-    else if (message.viewOnceMessage) message = message.viewOnceMessage.message;
-
-    const messageType = message ? Object.keys(message)[0] : null;
-    const isMedia = messageType && ['imageMessage', 'videoMessage', 'audioMessage'].includes(messageType);
-    
-    if (!message || !isMedia) return;
-
-    let buffer = await downloadMediaMessage(targetMessage.quoted, 'buffer');
-    if (!buffer) return;
-
-    let mimetype = message.audioMessage?.mimetype || 'audio/ogg';
-    let caption = `> *© cloud ai*`;
-
-    let recipient = isEmojiReply ? botNumber : ownerNumber;
-
-    if (messageType === 'imageMessage') {
-      await sock.sendMessage(recipient, { image: buffer, caption });
-    } else if (messageType === 'videoMessage') {
-      await sock.sendMessage(recipient, { video: buffer, caption, mimetype: 'video/mp4' });
-    } else if (messageType === 'audioMessage') {  
-      await sock.sendMessage(recipient, { audio: buffer, mimetype, ptt: true });
-    }
-
-  } catch (error) {
-    logger.error('View Once handler error:', error);
-  }
-}
-
 /* ==================== COMMAND HANDLER ==================== */
 
-function handleCommands(sock, userId) {
+function handleCommands(sock) {
   return async ({ messages }) => {
     try {
       const msg = messages[0];
@@ -484,58 +298,6 @@ function handleCommands(sock, userId) {
         return;
       }
 
-      if (command === 'alwaysonline on') {
-        if (!isOwner) return;
-        await manageAlwaysOnline(sock, userId, true);
-        await sock.sendMessage(jid, { text: "Always Online has been enabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'alwaysonline off') {
-        if (!isOwner) return;
-        await manageAlwaysOnline(sock, userId, false);
-        await sock.sendMessage(jid, { text: "Always Online has been disabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'autotyping on') {
-        if (!isOwner) return;
-        await manageAutoTyping(sock, userId, true);
-        await sock.sendMessage(jid, { text: "Auto-Typing has been enabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'autotyping off') {
-        if (!isOwner) return;
-        await manageAutoTyping(sock, userId, false);
-        await sock.sendMessage(jid, { text: "Auto-Typing has been disabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'autorecording on') {
-        if (!isOwner) return;
-        await manageAutoRecording(sock, userId, true);
-        await sock.sendMessage(jid, { text: "Auto-Recording has been enabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'autorecording off') {
-        if (!isOwner) return;
-        await manageAutoRecording(sock, userId, false);
-        await sock.sendMessage(jid, { text: "Auto-Recording has been disabled." }, { quoted: msg });
-        return;
-      }
-
-      if (command === 'features') {
-        const responseMessage = `Current Features Status:\n\n` +
-                              `🟢 Always Online: ${config.ALWAYS_ONLINE ? 'ON' : 'OFF'}\n` +
-                              `⌨️ Auto Typing: ${config.AUTO_TYPING ? 'ON' : 'OFF'}\n` +
-                              `🎤 Auto Recording: ${config.AUTO_RECORDING ? 'ON' : 'OFF'}\n\n` +
-                              `Owner can toggle these features`;
-        await sock.sendMessage(jid, { text: responseMessage }, { quoted: msg });
-        return;
-      }
-
       if (command.startsWith('play ') || command.startsWith('video ')) {
         await handleYouTubeDownload(sock, msg);
         return;
@@ -544,8 +306,6 @@ function handleCommands(sock, userId) {
       if (isOwner) {
         await handleAIChat(sock, msg);
       }
-
-      await handleViewOnce(sock, msg);
 
     } catch (err) {
       logger.error(`Command handler error: ${err}`);
@@ -575,17 +335,12 @@ async function startWhatsApp(userId, useQR = false) {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-      if (update.connection === 'close') {
-        manageAlwaysOnline(sock, userId, false);
-        manageAutoTyping(sock, userId, false);
-        manageAutoRecording(sock, userId, false);
-      } else if (update.connection === 'open') {
-        await sendWelcomeMessage(sock);
+      if (update.connection === 'open') {
+        await sendConnectionMessage(sock);
       }
     });
 
-    sock.ev.on('messages.upsert', handleStatusUpdates(sock));
-    sock.ev.on('messages.upsert', handleCommands(sock, userId));
+    sock.ev.on('messages.upsert', handleCommands(sock));
 
   } catch (err) {
     logger.error(`WhatsApp init failed: ${err}`);
@@ -595,56 +350,26 @@ async function startWhatsApp(userId, useQR = false) {
   }
 }
 
-async function sendWelcomeMessage(sock) {
+async function sendConnectionMessage(sock) {
   try {
-    await sock.sendMessage(sock.user.id, {
-      text: `*Hello 👋 your session is Live*\n\n` +
-            `Available Commands:\n\n` +
-            `• ping - Test bot response time\n` +
-            `• uptime - Show bot uptime\n` +
-            `• play [query] - Download audio\n` +
-            `• video [query] - Download video\n` +
-            `• features - Show feature status\n\n` +
-            `Owner Commands:\n` +
-            `• alwaysonline on/off\n` +
-            `• autotyping on/off\n` +
-            `• autorecording on/off\n` +
-            `• deepseek on/off\n\n` +
-            `View Once Media:\n` +
-            `• React with any emoji or send emoji reply\n` +
-            `> *Made By Bera_Tech*`,
-      contextInfo: {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: config.CHANNEL_JID,
-          newsletterName: config.CHANNEL_NAME,
-          serverMessageId: 143
-        }
-      }
+    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    await sock.sendMessage(botNumber, {
+      text: `✅ *WhatsApp Connection Established!*\n\n` +
+            `Your bot is now connected and ready to use.\n\n` +
+            `*Available Commands:*\n` +
+            `• *ping* - Check bot response time\n` +
+            `• *uptime* - Show bot uptime\n` +
+            `• *play [query]* - Download audio from YouTube\n` +
+            `• *video [query]* - Download video from YouTube\n` +
+            `• Ask any question for AI response\n\n` +
+            `*Connection Details:*\n` +
+            `- Server Time: ${getNairobiTime().format('LLLL')}\n` +
+            `- Uptime: ${formatUptime()}\n\n` +
+            `Enjoy using your bot!`
     });
   } catch (err) {
-    logger.error(`Welcome message failed: ${err}`);
+    logger.error(`Connection message failed: ${err}`);
   }
-}
-
-function handleStatusUpdates(sock) {
-  return async ({ messages }) => {
-    try {
-      const statusMsg = messages.find(m => m.key.remoteJid === 'status@broadcast');
-      if (!statusMsg) return;
-      await sock.readMessages([statusMsg.key]);
-      await delay(1000);
-      const emojis = ['🔥', '💯', '💎', '⚡', '✅', '💙', '👀', '🌟', '😎'];
-      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-      await sock.sendMessage(statusMsg.key.remoteJid, {
-        react: { text: emoji, key: statusMsg.key }
-      });
-      logger.info(`Reacted to status with ${emoji}`);
-    } catch (err) {
-      logger.error(`Status update error: ${err}`);
-    }
-  };
 }
 
 // API Endpoints
@@ -673,10 +398,7 @@ app.post('/verify-channel', async (req, res) => {
 
 app.get('/check-verification/:sessionId', (req, res) => {
   const isVerified = verifiedUsers.has(req.params.sessionId);
-  res.json({ 
-    verified: isVerified,
-    channelLink: `https://whatsapp.com/channel/${config.REQUIRED_CHANNEL}`
-  });
+  res.json({ verified: isVerified });
 });
 
 app.post('/set-session', async (req, res) => {
@@ -684,8 +406,7 @@ app.post('/set-session', async (req, res) => {
   
   if (!verifiedUsers.has(sessionId)) {
     return res.status(403).json({ 
-      error: 'Please verify by visiting our channel first',
-      channelLink: `https://whatsapp.com/channel/${config.REQUIRED_CHANNEL}`
+      error: 'Please verify by visiting our channel first'
     });
   }
 
@@ -701,15 +422,6 @@ app.post('/set-session', async (req, res) => {
   } else {
     res.status(500).json({ error: 'Session download failed' });
   }
-});
-
-app.get('/nairobi-time', (req, res) => {
-  const now = getNairobiTime();
-  res.json({
-    time: now.format('HH:mm:ss'),
-    date: now.format('dddd, D MMMM YYYY'),
-    timezone: 'Africa/Nairobi'
-  });
 });
 
 // Error handling middleware
