@@ -8,7 +8,7 @@ import {
     DisconnectReason,
     useMultiFileAuthState,
     getContentType
-} from '@whiskeysockets/baileys';
+} from 'gifted-baileys';
 
 import express from 'express';
 import pino from 'pino';
