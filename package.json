@@ -18,7 +18,7 @@
   "author": "Bruce Bera",
   "license": "ISC",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.4.0",
+    "gifted-baileys": "^2.0.0",
     "axios": "^1.6.2",
     "chalk": "^5.3.0",
     "dotenv": "^16.3.1",
@@ -35,5 +35,7 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  }
+}    "node": ">=18.0.0"
   }
 }
